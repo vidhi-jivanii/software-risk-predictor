@@ -13,7 +13,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score, StratifiedKFold
-from imblearn.over_sampling import SMOTE
 from datetime import datetime
 import warnings, io
 warnings.filterwarnings("ignore")
