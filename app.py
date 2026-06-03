@@ -1095,8 +1095,18 @@ elif "Bulk" in page:
     with k4: kpi("Avg Risk",    f"{res['Overall %'].mean():.1f}%","Portfolio")
 
     st.markdown("<br>", unsafe_allow_html=True)
+    # Style without matplotlib dependency
+    def color_risk(val):
+        try:
+            v = float(val)
+            if v >= 65:   return "background-color:#fee2e2;color:#991b1b;font-weight:600"
+            elif v >= 35: return "background-color:#fef9c3;color:#92400e;font-weight:600"
+            else:         return "background-color:#dcfce7;color:#166534;font-weight:600"
+        except:
+            return ""
     st.dataframe(
-        res.style.background_gradient(subset=["Overall %"],cmap="RdYlGn_r",vmin=0,vmax=100)
+        res.style
+        .applymap(color_risk, subset=["Overall %"])
         .format({"Technical %":"{:.1f}","Organisational %":"{:.1f}","Overall %":"{:.1f}"}),
         use_container_width=True, height=280,
     )
