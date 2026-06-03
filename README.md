@@ -2,6 +2,8 @@
 
 A research-based predictive analytics platform built on real survey data.
 
+Live URL Link : https://software-risk-predictor.streamlit.app/
+
 ## Data
 - Real survey responses: n=85
 - Augmented using SMOTE (Chawla et al., 2002) to address class imbalance
