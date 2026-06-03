@@ -1,7 +1,7 @@
 """
 Software Project Failure Risk Prediction System
 Research-based predictive analytics platform
-Built on real survey data (n=85) augmented with SMOTE
+Built on real survey data (n=85) with oversampling augmentation
 """
 
 import streamlit as st
@@ -294,26 +294,23 @@ def risk_label(v):
 @st.cache_resource(show_spinner=False)
 def load_and_train():
     """
-    Load real survey data (n=85), apply SMOTE augmentation,
-    train Logistic Regression and Random Forest classifiers.
-    Method: Chawla et al. (2002) — SMOTE for class imbalance.
+    Load real survey data (n=85), apply manual oversampling to address
+    class imbalance, then train Logistic Regression and Random Forest.
+    Oversampling: minority class duplicated with small Gaussian noise
+    (equivalent to SMOTE concept, no external dependency required).
     """
-    try:
-        df = pd.read_excel(
-            'Software_Project_Failure__Causes_and_Preventive_Measures___Responses_.xlsx'
-        )
-    except:
-        # Fallback: look in common paths
-        import os
-        for path in [
-            '/mnt/user-data/uploads/Software_Project_Failure__Causes_and_Preventive_Measures___Responses_.xlsx',
-            'data/survey.xlsx',
-        ]:
-            if os.path.exists(path):
-                df = pd.read_excel(path)
-                break
-        else:
-            return None, None, None, None, None, None, 0
+    import os
+    df = None
+    for path in [
+        'Software_Project_Failure__Causes_and_Preventive_Measures___Responses_.xlsx',
+        '/mnt/user-data/uploads/Software_Project_Failure__Causes_and_Preventive_Measures___Responses_.xlsx',
+    ]:
+        if os.path.exists(path):
+            df = pd.read_excel(path)
+            break
+
+    if df is None:
+        return None, None, None, None, None, 0
 
     c = list(df.columns)
     df = df.rename(columns={
@@ -326,21 +323,37 @@ def load_and_train():
     y  = df['target'].values
     n_real = len(X)
 
-    sm = SMOTE(random_state=42, k_neighbors=4)
-    X_sm, y_sm = sm.fit_resample(X, y)
+    # Manual oversampling of minority class with small noise
+    rng = np.random.default_rng(42)
+    minority_idx = np.where(y == 0)[0]
+    n_to_add     = len(np.where(y == 1)[0]) - len(minority_idx)
+    if n_to_add > 0:
+        chosen  = rng.choice(minority_idx, size=n_to_add, replace=True)
+        noise   = rng.normal(0, 0.15, size=(n_to_add, X.shape[1]))
+        X_new   = np.clip(X[chosen] + noise, 1, 5)
+        y_new   = np.zeros(n_to_add, dtype=int)
+        X_bal   = np.vstack([X, X_new])
+        y_bal   = np.concatenate([y, y_new])
+    else:
+        X_bal, y_bal = X, y
+
+    # Shuffle
+    idx     = rng.permutation(len(X_bal))
+    X_bal   = X_bal[idx]
+    y_bal   = y_bal[idx]
 
     sc = StandardScaler()
-    Xs = sc.fit_transform(X_sm)
+    Xs = sc.fit_transform(X_bal)
 
     lr = LogisticRegression(max_iter=1000, C=1.0, random_state=42)
-    lr.fit(Xs, y_sm)
-    lr_acc = cross_val_score(lr, Xs, y_sm,
+    lr.fit(Xs, y_bal)
+    lr_acc = cross_val_score(lr, Xs, y_bal,
                              cv=StratifiedKFold(5), scoring='accuracy').mean()
 
     rf = RandomForestClassifier(n_estimators=300, max_depth=6,
                                 min_samples_leaf=3, random_state=42)
-    rf.fit(X_sm, y_sm)
-    rf_acc = cross_val_score(rf, X_sm, y_sm,
+    rf.fit(X_bal, y_bal)
+    rf_acc = cross_val_score(rf, X_bal, y_bal,
                              cv=StratifiedKFold(5), scoring='accuracy').mean()
 
     return lr, rf, sc, round(lr_acc*100,1), round(rf_acc*100,1), n_real
@@ -417,7 +430,7 @@ with st.sidebar:
                 padding:12px 14px;font-size:11.5px;line-height:1.7;'>
         <div style='font-weight:700;margin-bottom:4px;'>📊 Data Source</div>
         <div style='opacity:.85;'>Real survey data · n=85</div>
-        <div style='opacity:.85;'>SMOTE augmentation</div>
+        <div style='opacity:.85;'>Oversampling augmentation</div>
         <div style='opacity:.85;'>Chawla et al. (2002)</div>
     </div>""", unsafe_allow_html=True)
 
@@ -479,8 +492,8 @@ if "Home" in page:
                 software engineers, developers, project managers, and IT students.
             </p>
             <p style='color:#334155;font-size:14px;line-height:1.75;margin:12px 0 0;'>
-                The AI models were trained using <b>SMOTE augmentation</b>
-                (Chawla et al., 2002) to address class imbalance in the real dataset,
+                The AI models were trained using <b>oversampling augmentation</b>
+                to address class imbalance in the real dataset,
                 achieving <b>Random Forest accuracy of {rf_acc}%</b>.
                 All scoring weights and recommendations are grounded directly in the
                 empirical regression and correlation findings.
@@ -633,10 +646,10 @@ elif "Risk" in page:
 elif "AI" in page:
     st.markdown("<div class='stitle'>🤖 AI Failure Prediction</div>", unsafe_allow_html=True)
     st.markdown("""
-    <div class='data-tag'>✅ Trained on Real Survey Data (n=85) + SMOTE Augmentation</div>
+    <div class='data-tag'>✅ Trained on Real Survey Data (n=85) + Oversampling</div>
     <p style='color:#64748b;font-size:13.5px;margin-bottom:20px;'>
         Two machine learning models trained on your survey data predict project failure probability.
-        SMOTE (Chawla et al., 2002) was applied to address class imbalance.
+        Oversampling was applied to address class imbalance in the real dataset.
     </p>""", unsafe_allow_html=True)
 
     if not model_ok:
@@ -675,7 +688,7 @@ elif "AI" in page:
                 <div style='font-size:16px;font-weight:700;color:#0f172a;
                             margin-bottom:3px;'>{icon} {name}</div>
                 <div style='font-size:11.5px;color:#94a3b8;margin-bottom:18px;'>
-                    CV Accuracy: {acc}% &nbsp;·&nbsp; Real data + SMOTE
+                    CV Accuracy: {acc}% &nbsp;·&nbsp; Real data + oversampling
                 </div>
                 <div style='display:flex;gap:28px;margin-bottom:16px;'>
                     <div>
@@ -756,7 +769,7 @@ elif "AI" in page:
                 font-size:12.5px;color:#334155;margin-top:4px;
                 border-left:3px solid #1e4d99;'>
         <b>Methodology note:</b> Models trained on n=85 real survey responses,
-        augmented to n=134 using SMOTE (Chawla et al., 2002) to address class imbalance.
+        augmented using oversampling with Gaussian noise to address class imbalance.
         Target variable: Q18 ≤ 2 (experienced project delays/overruns).
         5-fold stratified cross-validation used for accuracy assessment.
     </div>""", unsafe_allow_html=True)
@@ -1132,7 +1145,7 @@ elif "Export" in page or "Report" in page:
         "="*62,
         f"  Generated:  {now}",
         f"  System:     Software Project Failure Risk Prediction System",
-        f"  Data:       Real survey data (n=85) + SMOTE augmentation",
+        f"  Data:       Real survey data (n=85) + oversampling augmentation",
         "="*62,"",
         "RISK SUMMARY","-"*42,
         f"  Overall Risk:       {ov}%  ({cat})",
@@ -1157,7 +1170,7 @@ elif "Export" in page or "Report" in page:
                       f"  {r['body']}",""]
     lines += [
         "RESEARCH CONTEXT","-"*42,
-        "  Models trained on real survey data (n=85) + SMOTE augmentation.",
+        "  Models trained on real survey data (n=85) + oversampling augmentation.",
         "  Key findings: Reqs r=0.526, Integration β=0.375, Comm r=0.560.",
         "  References: Lehtinen et al.(2014); Forsgren et al.(2018);",
         "              Standish Group (2023); Chawla et al.(2002).",
@@ -1184,4 +1197,3 @@ elif "Export" in page or "Report" in page:
 
     with st.expander("👁️ Preview Report"):
         st.code(report_txt, language=None)
-
