@@ -1095,21 +1095,16 @@ elif "Bulk" in page:
     with k4: kpi("Avg Risk",    f"{res['Overall %'].mean():.1f}%","Portfolio")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    # Style without matplotlib dependency
-    def color_risk(val):
-        try:
-            v = float(val)
-            if v >= 65:   return "background-color:#fee2e2;color:#991b1b;font-weight:600"
-            elif v >= 35: return "background-color:#fef9c3;color:#92400e;font-weight:600"
-            else:         return "background-color:#dcfce7;color:#166534;font-weight:600"
-        except:
-            return ""
-    st.dataframe(
-        res.style
-        .applymap(color_risk, subset=["Overall %"])
-        .format({"Technical %":"{:.1f}","Organisational %":"{:.1f}","Overall %":"{:.1f}"}),
-        use_container_width=True, height=280,
+    def style_row(row):
+        v = float(row["Overall %"])
+        if v >= 65:   c = "background-color:#fee2e2; color:#991b1b;"
+        elif v >= 35: c = "background-color:#fef9c3; color:#92400e;"
+        else:         c = "background-color:#dcfce7; color:#166534;"
+        return [c] * len(row)
+    styled = res.style.apply(style_row, axis=1).format(
+        {"Technical %":"{:.1f}", "Organisational %":"{:.1f}", "Overall %":"{:.1f}"}
     )
+    st.dataframe(styled, use_container_width=True, height=280)
     fig = go.Figure()
     fig.add_trace(go.Bar(name="Technical",x=res["Project"],y=res["Technical %"],
                          marker_color="#1e4d99"))
